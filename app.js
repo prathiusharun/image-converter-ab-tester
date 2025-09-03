@@ -7,6 +7,10 @@ const path = require('path');
 const app = express();
 app.use(express.json());
 
+app.get('/', (req, res) => {
+  res.send('🚀 KPH Server is running!');
+});
+
 // Dynamic port for Render or local
 const PORT = process.env.PORT || 3000;
 
