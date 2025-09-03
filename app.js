@@ -1,104 +1,85 @@
-// app.js
-const express = require("express");
-const multer = require("multer");
-const sharp = require("sharp");
-const fs = require("fs");
-const path = require("path");
+const express = require('express');
+const multer = require('multer');
+const sharp = require('sharp');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
-const port = 3000;
-
-// Middleware to parse JSON requests
 app.use(express.json());
 
-// Setup multer for file uploads
-const upload = multer({ dest: "uploads/" });
+// Dynamic port for Render or local
+const PORT = process.env.PORT || 3000;
 
-/* ----------------------------
-   IMAGE CONVERTER API
------------------------------*/
+// Ensure uploads folder exists
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
-// POST /convert?format=jpg|png|webp
-app.post("/convert", upload.single("image"), async (req, res) => {
+// Multer setup
+const upload = multer({ dest: uploadDir });
+
+// In-memory store for thumbnail experiments
+const experiments = {};
+
+// -------------------
+// Image Converter API
+// -------------------
+app.post('/convert', upload.single('image'), async (req, res) => {
   try {
-    const format = req.query.format; // requested format
-    if (!req.file) return res.status(400).send("No file uploaded");
-    if (!["jpg", "png", "webp"].includes(format))
-      return res.status(400).send("Invalid format (use jpg, png, webp)");
-
+    const format = req.query.format || 'jpg';
     const inputPath = req.file.path;
-    const outputPath = `uploads/converted-${Date.now()}.${format}`;
+    const outputPath = path.join(uploadDir, `converted-${Date.now()}.${format}`);
 
-    // Convert using sharp
     await sharp(inputPath).toFormat(format).toFile(outputPath);
 
-    // Send back converted file
     res.download(outputPath, (err) => {
-      fs.unlinkSync(inputPath); // delete input file
-      fs.unlinkSync(outputPath); // delete output file
+      fs.unlinkSync(inputPath);
+      fs.unlinkSync(outputPath);
     });
   } catch (err) {
     console.error(err);
-    res.status(500).send("Error converting image");
+    res.status(500).json({ error: 'Conversion failed' });
   }
 });
 
-/* ----------------------------
-   THUMBNAIL A/B TESTER API
------------------------------*/
-
-const experiments = {}; // in-memory store
+// ------------------------
+// Thumbnail A/B Tester API
+// ------------------------
 
 // Create experiment
-app.post("/experiment", (req, res) => {
+app.post('/experiment', (req, res) => {
   const { videoId, thumbnails } = req.body;
-  if (!videoId || !thumbnails || !Array.isArray(thumbnails)) {
-    return res.status(400).send("videoId and thumbnails[] required");
-  }
+  if (!videoId || !thumbnails || !thumbnails.length)
+    return res.status(400).json({ error: 'Missing videoId or thumbnails' });
 
-  experiments[videoId] = {
-    thumbnails,
-    stats: thumbnails.reduce((acc, t) => {
-      acc[t] = 0;
-      return acc;
-    }, {}),
-  };
+  experiments[videoId] = {};
+  thumbnails.forEach((t) => (experiments[videoId][t] = 0));
 
-  res.json({ message: "Experiment created", experiment: experiments[videoId] });
+  res.json({ message: 'Experiment created', experiment: experiments[videoId] });
 });
 
-// Get a thumbnail (random selection)
-app.get("/thumbnail/:videoId", (req, res) => {
+// Get random thumbnail
+app.get('/thumbnail/:videoId', (req, res) => {
   const { videoId } = req.params;
-  const exp = experiments[videoId];
-  if (!exp) return res.status(404).send("Experiment not found");
+  const thumbs = experiments[videoId];
+  if (!thumbs) return res.status(404).json({ error: 'Experiment not found' });
 
-  const randomThumb =
-    exp.thumbnails[Math.floor(Math.random() * exp.thumbnails.length)];
-  exp.stats[randomThumb]++;
+  const keys = Object.keys(thumbs);
+  const chosen = keys[Math.floor(Math.random() * keys.length)];
+  thumbs[chosen] += 1;
 
-  res.json({ thumbnail: randomThumb });
+  res.json({ thumbnail: chosen });
 });
 
-// Get experiment results
-app.get("/results/:videoId", (req, res) => {
+// Get results
+app.get('/results/:videoId', (req, res) => {
   const { videoId } = req.params;
-  const exp = experiments[videoId];
-  if (!exp) return res.status(404).send("Experiment not found");
+  const thumbs = experiments[videoId];
+  if (!thumbs) return res.status(404).json({ error: 'Experiment not found' });
 
-  res.json(exp.stats);
+  res.json(thumbs);
 });
 
-/* ----------------------------
-   SERVER START
------------------------------*/
-
-// Root route (for testing in browser)
-app.get("/", (req, res) => {
-  res.send("✅ Server is running. Available routes: /convert, /experiment, /thumbnail/:videoId, /results/:videoId");
-});
-
-
-app.listen(port, () => {
-  console.log(`🚀 Server running at http://localhost:${port}`);
-});
+// ------------------------
+// Start Server
+// ------------------------
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
