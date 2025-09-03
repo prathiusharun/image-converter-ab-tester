@@ -7,10 +7,6 @@ const path = require('path');
 const app = express();
 app.use(express.json());
 
-app.get('/', (req, res) => {
-  res.send('🚀 KPH Server is running!');
-});
-
 // Dynamic port for Render or local
 const PORT = process.env.PORT || 3000;
 
@@ -21,8 +17,13 @@ if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 // Multer setup
 const upload = multer({ dest: uploadDir });
 
-// In-memory store for thumbnail experiments
-const experiments = {};
+// -------------------
+// Serve static files
+// -------------------
+app.use(express.static(path.join(__dirname, 'public')));
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 // -------------------
 // Image Converter API
@@ -48,8 +49,8 @@ app.post('/convert', upload.single('image'), async (req, res) => {
 // ------------------------
 // Thumbnail A/B Tester API
 // ------------------------
+const experiments = {};
 
-// Create experiment
 app.post('/experiment', (req, res) => {
   const { videoId, thumbnails } = req.body;
   if (!videoId || !thumbnails || !thumbnails.length)
@@ -61,7 +62,6 @@ app.post('/experiment', (req, res) => {
   res.json({ message: 'Experiment created', experiment: experiments[videoId] });
 });
 
-// Get random thumbnail
 app.get('/thumbnail/:videoId', (req, res) => {
   const { videoId } = req.params;
   const thumbs = experiments[videoId];
@@ -74,7 +74,6 @@ app.get('/thumbnail/:videoId', (req, res) => {
   res.json({ thumbnail: chosen });
 });
 
-// Get results
 app.get('/results/:videoId', (req, res) => {
   const { videoId } = req.params;
   const thumbs = experiments[videoId];
@@ -86,7 +85,4 @@ app.get('/results/:videoId', (req, res) => {
 // ------------------------
 // Start Server
 // ------------------------
-
-app.use(express.static(path.join(__dirname, 'public','index.html')));
-
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 KPH Server is running on port ${PORT}`));
