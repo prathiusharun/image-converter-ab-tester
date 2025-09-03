@@ -1,4 +1,4 @@
-# KPH Tools 🚀
+# KPH Tools 
 
 A simple **Image Converter** and **Thumbnail A/B Testing Tool** built with Node.js, Express, Multer, and Sharp.  
 Works out-of-the-box with minimal setup.
